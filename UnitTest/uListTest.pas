@@ -483,6 +483,37 @@ type
 
   {$ENDIF TEST_OBJECTLIST}
 
+  [TestFixture]
+  TRapidListAddRangeTests = class
+  public
+    [Test]
+    procedure AppendsItemsToANonEmptyDestination;
+    [Test]
+    procedure DoesNotModifyTheSource;
+    [Test]
+    procedure DoesNotShrinkExistingCapacity;
+    [Test]
+    procedure AppendingAnEmptyListDoesNotChangeTheDestination;
+  end;
+
+type
+  TSortItem = class
+  public
+    Left: Integer;
+    Top: Integer;
+    Id: string;
+    constructor Create(const AId: string; const ALeft, ATop: Integer);
+  end;
+
+  [TestFixture]
+  TRapidCustomComparerSortTests = class
+  private
+    function CompareByLeftThenTop(const L, R: TSortItem): Integer;
+  public
+    [Test]
+    procedure SortsWithConstructedComparerAndAppendsReusedTempList;
+  end;
+
 implementation
 
 uses
@@ -3145,6 +3176,174 @@ end;
 
 {$ENDREGION 'TTestObjectList Tests'}
 
+{$Region 'TRapidListAddRangeTests'}
+
+procedure TRapidListAddRangeTests.AppendsItemsToANonEmptyDestination;
+var
+  Destination: TList<Integer>;
+  Source: TList<Integer>;
+begin
+  Destination := TList<Integer>.Create;
+  Source := TList<Integer>.Create;
+  try
+    Destination.AddRange([10, 20]);
+    Source.AddRange([30, 40, 50]);
+
+    Destination.AddRange(Source);
+
+    Assert.AreEqual(5, Destination.Count);
+    Assert.AreEqual(10, Destination[0]);
+    Assert.AreEqual(20, Destination[1]);
+    Assert.AreEqual(30, Destination[2]);
+    Assert.AreEqual(40, Destination[3]);
+    Assert.AreEqual(50, Destination[4]);
+  finally
+    Source.Free;
+    Destination.Free;
+  end;
+end;
+
+procedure TRapidListAddRangeTests.DoesNotModifyTheSource;
+var
+  Destination: TList<Integer>;
+  Source: TList<Integer>;
+begin
+  Destination := TList<Integer>.Create;
+  Source := TList<Integer>.Create;
+  try
+    Destination.Add(1);
+    Source.AddRange([2, 3, 4]);
+
+    Destination.AddRange(Source);
+
+    Assert.AreEqual(3, Source.Count);
+    Assert.AreEqual(2, Source[0]);
+    Assert.AreEqual(3, Source[1]);
+    Assert.AreEqual(4, Source[2]);
+  finally
+    Source.Free;
+    Destination.Free;
+  end;
+end;
+
+procedure TRapidListAddRangeTests.DoesNotShrinkExistingCapacity;
+var
+  Destination: TList<Integer>;
+  Source: TList<Integer>;
+  CapacityBefore: Integer;
+begin
+  Destination := TList<Integer>.Create;
+  Source := TList<Integer>.Create;
+  try
+    Destination.Capacity := 128;
+    Destination.AddRange([10, 20]);
+    Source.Add(30);
+    CapacityBefore := Destination.Capacity;
+
+    Destination.AddRange(Source);
+
+    Assert.AreEqual(3, Destination.Count);
+    Assert.AreEqual(10, Destination[0]);
+    Assert.AreEqual(20, Destination[1]);
+    Assert.AreEqual(30, Destination[2]);
+    Assert.AreEqual(CapacityBefore, Destination.Capacity,
+      'AddRange must not discard already-reserved destination capacity');
+  finally
+    Source.Free;
+    Destination.Free;
+  end;
+end;
+
+procedure TRapidListAddRangeTests.AppendingAnEmptyListDoesNotChangeTheDestination;
+var
+  Destination: TList<Integer>;
+  Source: TList<Integer>;
+begin
+  Destination := TList<Integer>.Create;
+  Source := TList<Integer>.Create;
+  try
+    Destination.AddRange([10, 20]);
+
+    Destination.AddRange(Source);
+
+    Assert.AreEqual(2, Destination.Count);
+    Assert.AreEqual(10, Destination[0]);
+    Assert.AreEqual(20, Destination[1]);
+  finally
+    Source.Free;
+    Destination.Free;
+  end;
+end;
+
+{$EndRegion 'TRapidListAddRangeTests'}
+
+{$Region 'TRapidCustomComparerSortTests'}
+
+constructor TSortItem.Create(const AId: string; const ALeft, ATop: Integer);
+begin
+  inherited Create;
+  Id := AId;
+  Left := ALeft;
+  Top := ATop;
+end;
+
+function TRapidCustomComparerSortTests.CompareByLeftThenTop(
+  const L, R: TSortItem): Integer;
+begin
+  Result := L.Left - R.Left;
+  if Result = 0 then
+    Result := L.Top - R.Top;
+end;
+
+procedure TRapidCustomComparerSortTests.SortsWithConstructedComparerAndAppendsReusedTempList;
+var
+  ResultList: TList<TSortItem>;
+  TempList: TList<TSortItem>;
+  A, B, C, D, E: TSortItem;
+begin
+  ResultList := TList<TSortItem>.Create;
+  TempList := TList<TSortItem>.Create;
+  A := TSortItem.Create('A', 200, 10);
+  B := TSortItem.Create('B', 10, 100);
+  C := TSortItem.Create('C', 10, 20);
+  D := TSortItem.Create('D', 80, 10);
+  E := TSortItem.Create('E', 20, 10);
+  try
+    // First source group: insertion order is A, B, C;
+    // expected sort order is C, B, A.
+    TempList.Add(A);
+    TempList.Add(B);
+    TempList.Add(C);
+    TempList.Sort(TComparer<TSortItem>.Construct(CompareByLeftThenTop));
+    ResultList.AddRange(TempList);
+
+    // Mimic the next bar: reuse the same temporary list, sort again,
+    // then append the independently sorted group.
+    TempList.Clear;
+    TempList.Add(D);
+    TempList.Add(E);
+    TempList.Sort(TComparer<TSortItem>.Construct(CompareByLeftThenTop));
+    ResultList.AddRange(TempList);
+
+    Assert.AreEqual(5, ResultList.Count);
+    Assert.IsTrue(ResultList[0] = C, 'First group item 1');
+    Assert.IsTrue(ResultList[1] = B, 'First group item 2');
+    Assert.IsTrue(ResultList[2] = A, 'First group item 3');
+    Assert.IsTrue(ResultList[3] = E, 'Second group item 1');
+    Assert.IsTrue(ResultList[4] = D, 'Second group item 2');
+  finally
+    E.Free;
+    D.Free;
+    C.Free;
+    B.Free;
+    A.Free;
+    TempList.Free;
+    ResultList.Free;
+  end;
+end;
+
+{$EndRegion}
+
 { TTestObjectList }
 
 procedure TTestObjectList.Notify(const Item: TTestObject;
@@ -3165,6 +3364,8 @@ initialization
   TDUnitX.RegisterTestFixture(TListTestRecordComplex);
   TDUnitX.RegisterTestFixture(TObjectListTestObject);
   TDUnitX.RegisterTestFixture(TObjectListDescendantTestObject);
+  TDUnitX.RegisterTestFixture(TRapidListAddRangeTests);
+  TDUnitX.RegisterTestFixture(TRapidCustomComparerSortTests);
 
 end.
 

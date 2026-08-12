@@ -20221,13 +20221,23 @@ end;
 procedure TList<T>.AddRange(const AList: TList<T>);
 var
   I: Integer;
+  C: Integer;
 begin
-  if Assigned(AList) then
-  begin
-    Capacity := AList.Count + AList.Count;
-    for I := 0 to AList.Count - 1 do
-      Add(AList.Items[I]);
-  end;
+  if not Assigned(AList) then
+    Exit;
+
+  if AList = Self then
+    Exit;
+
+  C := AList.Count;
+  if C = 0 then
+    Exit;
+
+  if Count + C > Capacity then
+    Capacity := Count + C;
+
+  for I := 0 to C - 1 do
+    Add(AList.Items[I]);
 end;
 
 procedure TList<T>.InsertRange(Index: Integer; const Collection: IEnumerable<T>);
