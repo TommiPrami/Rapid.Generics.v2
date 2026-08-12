@@ -20226,8 +20226,13 @@ begin
   if not Assigned(AList) then
     Exit;
 
-  if AList = Self then
-    Exit;
+  // AM: My original code used to exit here. To keep the same expected semantics (found both in System.Generics.Collections and C#)
+  // I'm commenting it out, although my preference was to keep this check.
+  // ListXYZ.AddRange(ListXYZ) is likely a developer mistake and a bug,
+  // but silently exiting here would cause confusion and make it incompatible
+
+  //if AList = Self then
+  //  Exit;
 
   C := AList.Count;
   if C = 0 then

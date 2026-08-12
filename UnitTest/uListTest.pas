@@ -494,6 +494,8 @@ type
     procedure DoesNotShrinkExistingCapacity;
     [Test]
     procedure AppendingAnEmptyListDoesNotChangeTheDestination;
+    [Test]
+    procedure AppendToSelf;
   end;
 
 type
@@ -3272,6 +3274,34 @@ begin
   finally
     Source.Free;
     Destination.Free;
+  end;
+end;
+
+procedure TRapidListAddRangeTests.AppendToSelf;
+var
+  Source,
+  Destination: TList<Integer>;
+begin
+  Source := TList<Integer>.Create;
+  Destination := Source;
+  try
+    Source.Add(1);
+    Source.Add(2);
+    Source.Add(3);
+
+    Destination.AddRange(Source);
+
+    Assert.AreEqual(6, Source.Count);
+    Assert.AreEqual(6, Destination.Count);
+
+    Assert.AreEqual(1, Destination[0]);
+    Assert.AreEqual(2, Destination[1]);
+    Assert.AreEqual(3, Destination[2]);
+    Assert.AreEqual(1, Destination[3]);
+    Assert.AreEqual(2, Destination[4]);
+    Assert.AreEqual(3, Destination[5]);
+  finally
+    Source.Free;
   end;
 end;
 
